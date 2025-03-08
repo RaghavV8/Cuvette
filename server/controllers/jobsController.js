@@ -6,6 +6,12 @@ const mongoose = require("mongoose");
 //create job category 
 exports.createJob = async(req,res,next)=>{
     try {
+        console.log("Recieved Job Data: ",req.body);
+        console.log("User form req.user: ",req.user);
+
+        if(!req.user){
+            return res.status(400).json({success: false, error:"User is not authenticated"});
+        }
         const job = await Job.create({
             title: req.body.title,
             description: req.body.description,
@@ -19,6 +25,7 @@ exports.createJob = async(req,res,next)=>{
             job
         })
     } catch (error) {
+        console.error("Job creation error",error);
        next(error); 
     }
 }
@@ -39,7 +46,13 @@ exports.singleJob = async (req, res, next) => {
 //update job by id.
 exports.updateJob= async (req, res, next) => {
     try {
-        const job = await Job.findByIdAndUpdate(req.params.job_id, req.body, {new: true}).populate('jobType', 'jobTypename').populate('user', 'firstName', 'lastName');
+        const job = await Job.findByIdAndUpdate(
+            req.params.job_id, 
+            req.body, 
+            {new: true}
+        )
+            .populate('jobType', 'jobTypename')
+            .populate('user', 'firstName lastName');
         res.status(200).json({
             success: true,
             job
@@ -97,3 +110,46 @@ exports.showJobs = async (req, res, next) => {
         next(error);
     }
 };
+
+//To show jobs by user
+exports.showJobsByUser = async (req,res,next) =>{
+    try {
+        const jobs = await Job.find({ user: req.user._id }).populate("user", "firstName lastName email"); // ✅ Populate user details
+        if(!jobs || jobs.lengtj === 0){
+            return res.status(404).json({ success: false, error: "No jobs found for this user" });
+        }
+        res.status(200).json({success: true, jobs});
+    } catch (error) {
+        console.log("Error fetching user Jobs:",error);
+        res.status(500).json({success: false, error:" Server Error"});
+    }
+};
+
+
+// To Delete jobs selected by employer one job at a time
+exports.DeleteJob = async (req,res,next)=>{
+    try {
+
+        console.log("Delete request received for job_id:", req.params.job_id);
+
+        const {job_id}= req.params;
+        if (!mongoose.Types.ObjectId.isValid(job_id)) {
+            console.log("Invalid Job ID format:", job_id);
+            return res.status(400).json({ error: "Invalid Job ID format" });
+        }
+
+        const deletedJob = await Job.findByIdAndDelete(job_id);
+        
+        if(!deletedJob){
+            console.log("Job not found:", job_id);
+            return res.status(404).json({error: "Job Not Found"});
+        }
+
+        res.status(200).json({
+            message:"Job deleted succesfully"
+        });
+    } catch (error) {
+        console.error("Error deleting job:",error);
+        res.status(500).json({error: "Server Error"});
+    }
+}

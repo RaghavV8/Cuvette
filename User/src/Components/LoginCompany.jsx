@@ -1,7 +1,7 @@
 import React from 'react'
 import Navbar from './Navbar'
 import Register from './RegisterStudents'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 
 
@@ -13,8 +13,29 @@ const Login = () => {
     formState: { errors },
   } = useForm();
 
-  const onSubmit = (data) => {
-    console.log("Form Data:", data);
+  const navigate = useNavigate();
+
+  const onSubmit = async (data) => {
+    console.log("Sending Data:", data);
+    try {
+      const response = await fetch("http://localhost:9000/api/signin",{
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({...data}),
+        credentials:"include",
+      });
+
+      const resData = await response.json();
+      console.log("Server Response:",resData);
+
+      if(response.ok && resData?.user?.role === 1){
+        navigate("/company/home");
+      }else{
+        console.log(`Error: ${resData.error || "Something has gone wrong"}`);
+      }
+    } catch (error) {
+      console.log("Error: ",error);
+    }
   }
   return (
     <form onSubmit={handleSubmit(onSubmit)}>

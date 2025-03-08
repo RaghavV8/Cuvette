@@ -48,16 +48,36 @@ exports.signin = async (req,res,next) =>{
 }
 
 const sendTokenResponse = async(user,codeStatus, res)=>{
+
+    if(!user){
+        return res.status(400).json({ success: false, error: "User is undefined" });
+    }
+    
     const token = await user.getJwtToken();
-    res
-        .status(codeStatus)
+
+     if (!token) {
+        return res.status(400).json({ success: false, error: "Token generation failed" });
+    }
+    console.log("Setting Cookie: Token =", token);
+
+    //Setting Cookie Options
+    const options = {
+        httpOnly: true, // Prevents Javascript access (More secure than localStorage)
+        secure: process.env.NODE_ENV === "production", // Works only in HTTPS in production
+        sameSite: "Lax", // Allows sending cookies only for same-site requests
+        maxAge: 60*60*1000, // 1 Hour Cookie Age 
+    };
+
+    res.status(codeStatus)
         .cookie('token',token, {maxAge: 60*60*1000, httpOnly: true }) // if on production you can use https for secure connection
          .json({success:true, token, user})
-}
+};
+
+
 
 //log out
 exports.logout = (req,res,next)=>{
-    res.clearCookie('token');
+    res.clearCookie('token'); //Properly removes the authentication cookie
     res.status(200).json({
         success:true,
         message: "logged out"

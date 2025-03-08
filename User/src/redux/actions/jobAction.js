@@ -6,7 +6,7 @@ export const jobLoadAction = (pageNumber, keyword = '', cat = '', location = '')
     try {
         const { data } = await axios.get(`/api/jobs/show/?pageNumber=${pageNumber}&keyword=${keyword}&cat=${cat}&location=${location}`)
 
-        console.log("API Response:", data);
+        // console.log("API Response:", data);
         dispatch({
             type: JOB_LOAD_SUCCESS,
             payload: data

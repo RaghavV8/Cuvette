@@ -1,8 +1,136 @@
-import React from 'react'
-import { Link } from 'react-router-dom';
-import Navbar from './Navbar';
+import React, { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom';
+import AppliedCard from './AppliedCard';
+import { useDispatch } from 'react-redux';
 
 const StudentsHome = () => {
+    const [appliedJobs, setAppliedJobs] = useState([]);
+    const [user, setUser] = useState(null);
+    const navigate = useNavigate();
+    const dispatch = useDispatch();
+    const [searchTerm, setSearchTerm] = useState("");
+
+  //For search based on status of the application
+  const [selectedStatus, setSelectedStatus] = useState("");
+
+    const fetchAppliedJobs = async () => {
+        try {
+            const response = await fetch("http://localhost:9000/api/applied", {
+                method: "GET",
+                credentials: "include"
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                setAppliedJobs(data.applications);
+            }
+        } catch (error) {
+            console.error("Error fetching applied jobs:", error);
+        }
+    };
+    useEffect(() => {
+        fetchAppliedJobs();
+    }, []);
+
+    //To Rerender whenever an application is removed
+    const handleAppRemove = (applicationId) => {
+        fetchAppliedJobs()
+    }
+
+
+    //To prevent user from going back to login page after logging out without authentication
+    useEffect(() => {
+        const checkAuth = async () => {
+            try {   //get requests sent to backend for the cookie authentication at the /api/me endpoint of the server
+                const response = await fetch("http://localhost:9000/api/me", {
+                    method: "GET",
+                    credentials: "include",
+                });
+                if (!response.ok) {
+                    navigate("/students/login", { replace: true }); //if its true user is allowed to enter
+                }
+            } catch (error) {
+                console.log("Error checking authentication", error);
+                navigate("/students/login", { replace: true });
+            }
+        };
+        checkAuth();
+    }, []);
+
+
+    // Fetch Logged-in User Details
+    useEffect(() => {
+        const fetchUserProfile = async () => {
+            try {
+                {
+                    const response = await fetch("http://localhost:9000/api/me", {
+                        method: "GET",
+                        credentials: "include", //Ensures cookies/tokens are sent
+                        headers: {
+                            Authorization: `Bearer ${localStorage.getItem("token")}`,
+                            "Content-Type": "application/json",
+                        },
+                    });
+                    const data = await response.json();
+                    if (response.ok) {
+                        setUser(data.user);
+                    } else {
+                        console.log("Error fetching data", data.error);
+                    }
+                }
+            } catch (error) {
+                console.log("Error Fetching user profile", error);
+            }
+        };
+        console.log(localStorage.getItem("token"));
+
+        fetchUserProfile();
+    }, []);
+
+    //Logout Function
+    const handleLogout = async () => {
+        try {
+            await fetch("http://localhost:9000/api/logout", { method: "GET" });
+
+            //Clear local storage to redirect to login page
+            localStorage.removeItem("token");
+            localStorage.removeItem("role");
+            navigate("/students/login", { replace: true });
+        } catch (error) {
+            console.log("Logout error", error);
+        }
+    };
+
+    const filteredJobs = appliedJobs.filter(({job,status})=>{
+        const jobTitle = job?.title ? job.title.toLowerCase(): "";
+        const jobLocation = job?.location ? job.location.toLowerCase(): "";
+        const jobDescription = job?.description ? job.description.toLowerCase(): "";
+        const jobSalary = job?.salary ? job.salary.toLowerCase(): "";
+        const jobStatus = status ? status.toLowerCase() : "";
+
+        const matchesSearch = 
+        jobTitle.includes(searchTerm.toLowerCase()) ||
+        jobLocation.includes(searchTerm.toLowerCase()) ||
+        jobDescription.includes(searchTerm.toLowerCase()) ||
+        jobSalary.includes(searchTerm.toLowerCase());
+
+        const matchesStatus =  selectedStatus ? jobStatus === selectedStatus.toLowerCase() : true;
+
+        return matchesSearch && matchesStatus;
+    })
+
+
+    const handleFilterChange = (event) => {
+    setSelectedStatus(event.target.value)
+    fetchAppliedJobs();
+  };
+
+  //5 second interval to keep on refreshing data from the api every 5 seconds
+  useEffect(()=>{
+    const interval = setInterval(fetchAppliedJobs, 5000);
+    return ()=>clearInterval(interval);
+  },[]);
+
     return (
         <div className='bg-white'>
             <nav className="bg-white shadow-md border-b border-gray-200">
@@ -20,9 +148,17 @@ const StudentsHome = () => {
                             <div className="ml-4 flex items-center">
                                 <div className="flex items-center border border-gray-300 rounded-lg py-1 px-6">
                                     <img src="user.png" className="h-8 w-8 rounded-full" alt="Profile" />
-                                    <select name="" id="" className='p-2 ml-4  border border-gray-300 rounded'>
-                                        <option value="">Student</option>
-                                        <option value="">Logout</option>
+                                    <select className='p-2 ml-4  border border-gray-300 rounded'
+                                        onChange={(e) => {
+                                            if (e.target.value == "logout") {
+                                                handleLogout();
+                                            }
+                                        }}
+                                    >
+                                        <option value="">
+                                            {user ? `${user.firstName} ${user.lastName}` : "Loading"}
+                                        </option>
+                                        <option value="logout">Logout</option>
                                     </select>
                                 </div>
                             </div>
@@ -59,12 +195,44 @@ const StudentsHome = () => {
 
                 <main className="flex-1 p-10 ">
                     <h1 className="text-2xl font-semibold">
-                        Other Jobs
+                        Applied Jobs
                     </h1>
                     <div className="mb-5 mt-5" >
-                        <input type="text" className='p-2 border border-gray-300 rounded w-full' placeholder='Search Jobs...' />
+                        <input type="text" className='p-2 border border-gray-300 rounded w-full' placeholder='Search Jobs...'
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
                     </div>
+                    {filteredJobs.length > 0 ? (
+                        filteredJobs.map(({ _id, job, status }) => (
+                            <AppliedCard
+                                key={job._id}
+                                applicationId={_id}
+                                status={status}
+                                {...job}
+                                onRemove={() => handleAppRemove(_id)}
+                            />
+                        ))
+                    ) : (
+                        <p className="text-gray-500">No applied jobs yet.</p>
+                    )}
                 </main>
+                <div className="w-64 p-6 bg-white border-l border-gray-200">
+                    <h2 className="text-lg font-medium">Filters</h2>
+                    <div className="flex flex-col gap-4 mt-2">
+                        {/* Job Type Dropdown */}
+                        <select name="Job-Type" id=""
+                            className='p-2 border-2 border-black rounded bg-white'
+                            value={selectedStatus}
+                            onChange={handleFilterChange}
+                        >
+                            <option value="">All </option>
+                            <option value="accepted">Accepted</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="pending">Pending</option>
+
+                        </select>
+                    </div>
+                </div>
             </div>
         </div>
     )
